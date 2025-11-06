@@ -1,9 +1,10 @@
 
-//declares other folders to use
 mod token;
 mod lexer;
+mod parser;
 
 use lexer::{LexicalAnalyzer, Lexer};
+use parser::{LolcodeParser, Parser};
 use std::path::Path;
 
 fn main() {
@@ -13,32 +14,34 @@ fn main() {
         std::process::exit(1);
     });
 
-    //.lol extension for test
-     if Path::new(&input).extension().and_then(|s| s.to_str()) != Some("lol") {
+    //make sure its a .lol file, error if not
+    if Path::new(&input).extension().and_then(|s| s.to_str()) != Some("lol") {
         eprintln!("Error: input file must have a .lol extension");
         std::process::exit(1);
     }
 
     //read file to a string
-     let source = std::fs::read_to_string(&input).unwrap_or_else(|e| {
+    let source = std::fs::read_to_string(&input).unwrap_or_else(|e| {
         eprintln!("Failed to read '{}': {}", input, e);
         std::process::exit(1);
     });
-
-    //initialize lexer
-     let mut lx = Lexer::new(&source);
-
-     //pull all tokens in file and if invalid print error message and exit. 
-     //if all valid output valid
-     loop {
-        let tok = lx.get_next_token();
+    //Testing task 1: Lexical Analysis
+    //test that all tokens are valid
+    let mut lexer = Lexer::new(&source);
+    loop {
+        let tok = lexer.get_next_token();
         if let token::TokenKind::Eof = tok.kind {
             break;
         }
-        
+        //if we get here, token was valid (lexer would exit on invalid tokens)
     }
 
-    // lexer successs
-    println!("valid");
+    //Testing task 2: Syntax Analysis
+    let mut parser = LolcodeParser::new(&source);
+    
+    //parse the source to build abstract syntax tree
+    parser.parse();
 
+    //if we reach here, both lexical and syntax analysis succeeded
+    println!("valid");
 }

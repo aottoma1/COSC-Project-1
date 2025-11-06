@@ -3,7 +3,7 @@ use crate::token::{Token, TokenKind};
 //exit when something illegal found
 use std::process::exit;
 
-//Lexical Analyzer Trait
+//Lexical analyzer trait
 pub trait LexicalAnalyzer{
     fn get_char(&mut self) -> Option<char>;
     fn add_char(&mut self, c: char);
@@ -11,7 +11,7 @@ pub trait LexicalAnalyzer{
     fn get_next_token(&mut self) -> Token;
 }
 
-// Char by Char Lexer
+// Char by char Lexer
 pub struct Lexer<'a>{
     src: &'a str,
     iter: std::str::CharIndices<'a>,
@@ -40,8 +40,9 @@ impl <'a> Lexer <'a>{
         self.look.map(|(_,c)| c)
     }
 
+    //returns current character and moves counter to next one
     fn bump(&mut self) -> Option<char> {
-        let ch = self.look?;
+        let ch = self.look?; // grabs current characteer
         // advance line/col
         if ch.1 == '\n' {
             self.line += 1;
@@ -49,8 +50,8 @@ impl <'a> Lexer <'a>{
         } else {
             self.col += 1;
         }
-        self.look = self.iter.next();
-        Some(ch.1)
+        self.look = self.iter.next(); // go to next character
+        Some(ch.1) // return character just consumed
     }
     
     fn error_exit(&self, msg: &str) -> ! {
@@ -71,9 +72,8 @@ impl <'a> Lexer <'a>{
             "LIST" | "ITEM" | "NEWLINE" | "SOUNDZ" | "VIDZ"
         )
     }
-
+    // ensures every #OBTW has a closing #TLDR which is technically some syntax analysis but only for comments
     fn skip_multiline_comment(&mut self) {
-        // Already consumed #OBTW, now skip until #TLDR
         loop {
             if self.peek().is_none() {
                 self.error_exit("Unclosed comment block - missing #TLDR");
@@ -105,27 +105,79 @@ impl <'a> Lexer <'a>{
         //consume #
         self.get_char();
         
-        //use add_char to build a word(token)
+        //read first word
         self.cur.clear();
         while let Some(c) = self.peek() {
             if c.is_ascii_alphabetic() {
-            let ch = self.get_char().unwrap();
-            self.add_char(ch);
-    } else {
-        break;
-    }
-}
-        
-        //upppercase
-        let trimmed = self.cur.trim().to_ascii_uppercase();
-        
-        //checking if valid hashtag word using lookup
-        if !self.lookup(&trimmed) {
-            self.error_exit(&format!("Unrecognized hashtag word '#{}'", trimmed));
+                let ch = self.get_char().unwrap();
+                self.add_char(ch);
+            } else {
+                break;
+            }
         }
         
-        // Handle multi-line comment
-        if trimmed == "OBTW" {
+        let first_word = self.cur.to_ascii_uppercase();
+        
+        // Check for hashkey words with 2 words: #I HAZ, #IT IZ, #LEMME SEE
+        let full_word = if first_word == "I" && self.peek() == Some(' ') {
+            self.get_char(); // consume space
+            let mut second = String::new();
+            while let Some(c) = self.peek() {
+                if c.is_ascii_alphabetic() {
+                    let ch = self.get_char().unwrap();
+                    second.push(ch);
+                } else {
+                    break;
+                }
+            }
+            if second.to_ascii_uppercase() == "HAZ" {
+                "I HAZ".to_string()
+            } else {
+                first_word
+            }
+        } else if first_word == "IT" && self.peek() == Some(' ') {
+            self.get_char(); // consume space
+            let mut second = String::new();
+            while let Some(c) = self.peek() {
+                if c.is_ascii_alphabetic() {
+                    let ch = self.get_char().unwrap();
+                    second.push(ch);
+                } else {
+                    break;
+                }
+            }
+            if second.to_ascii_uppercase() == "IZ" {
+                "IT IZ".to_string()
+            } else {
+                first_word
+            }
+        } else if first_word == "LEMME" && self.peek() == Some(' ') {
+            self.get_char(); // consume space
+            let mut second = String::new();
+            while let Some(c) = self.peek() {
+                if c.is_ascii_alphabetic() {
+                    let ch = self.get_char().unwrap();
+                    second.push(ch);
+                } else {
+                    break;
+                }
+            }
+            if second.to_ascii_uppercase() == "SEE" {
+                "LEMME SEE".to_string()
+            } else {
+                first_word
+            }
+        } else {
+            first_word
+        };
+        
+        //checking if valid hashtag word using lookup
+        if !self.lookup(&full_word) {
+            self.error_exit(&format!("Unrecognized hashtag word '#{}'", full_word));
+        }
+        
+        // OBTW...TLDR is a multi-line comment block - skip it entirely
+        if full_word == "OBTW" {
             self.skip_multiline_comment();
             // After comment, get next real token
             return self.get_next_token();
@@ -133,7 +185,7 @@ impl <'a> Lexer <'a>{
         
         //put together token
         Token {
-            kind: TokenKind::HashWord(format!("#{}", trimmed)),
+            kind: TokenKind::HashWord(format!("#{}", full_word)),
             line: start_line,
             col: start_col,
         }
@@ -144,12 +196,12 @@ impl <'a> Lexer <'a>{
         
         while let Some(c) = self.peek() {
             if c.is_ascii_alphanumeric() {
-            let ch = self.get_char().unwrap();
-            self.add_char(ch);
-    } else {
-        break;
-    }
-}
+                let ch = self.get_char().unwrap();
+                self.add_char(ch);
+            } else {
+                break;
+            }
+        }
         
         let upper = self.cur.to_ascii_uppercase();
         
@@ -161,7 +213,7 @@ impl <'a> Lexer <'a>{
                 col: start_col,
             }
         } else {
-            // It's a VARDEF (variable name - A-Z, a-z, no spaces)
+            // defining a variable
             Token {
                 kind: TokenKind::VarDef(self.cur.clone()),
                 line: start_line,
@@ -174,14 +226,22 @@ impl <'a> Lexer <'a>{
         let mut text = String::new();
         
         while let Some(c) = self.peek() {
-            if c == '\n' {
+            // Stop at newline or hashtag
+            if c == '\n' || c == '#' {
                 break;
             }
             text.push(self.bump().unwrap());
         }
         
+        let trimmed = text.trim().to_string();
+        
+        // If empty skip to next token
+        if trimmed.is_empty() {
+            return self.get_next_token();
+        }
+        
         Token {
-            kind: TokenKind::Text(text.trim().to_string()),
+            kind: TokenKind::Text(trimmed),
             line: start_line,
             col: start_col,
         }
@@ -225,7 +285,7 @@ impl<'a> LexicalAnalyzer for Lexer<'a> {
             },
         };
 
-        // handle newlines if present
+        // newlines are significant
         if ch == '\n' {
             self.bump();
             return Token {
@@ -245,7 +305,7 @@ impl<'a> LexicalAnalyzer for Lexer<'a> {
             return self.read_word(start_line, start_col);
         }
 
-        // Everything else is plain text or punctuation
+        // anything else is treated as plain text (numbers, punctuation, etc.)
         self.read_text_line(start_line, start_col)
     }
 }
