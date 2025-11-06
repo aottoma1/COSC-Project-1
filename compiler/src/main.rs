@@ -2,9 +2,11 @@
 mod token;
 mod lexer;
 mod parser;
+mod semantic;
 
 use lexer::{LexicalAnalyzer, Lexer};
 use parser::{LolcodeParser, Parser};
+use semantic::LolcodeSemanticAnalyzer;
 use std::path::Path;
 
 fn main() {
@@ -33,7 +35,7 @@ fn main() {
         if let token::TokenKind::Eof = tok.kind {
             break;
         }
-        //if we get here, token was valid (lexer would exit on invalid tokens)
+        // token was valid (lexer would exit on invalid tokens)
     }
 
     //Testing task 2: Syntax Analysis
@@ -41,6 +43,16 @@ fn main() {
     
     //parse the source to build abstract syntax tree
     parser.parse();
+
+    //Testing task 3: Semantic Analysis
+    //get the parse tree from the parser
+    if let Some(ref tree) = parser.parse_tree {
+        let mut semantic_analyzer = LolcodeSemanticAnalyzer::new();
+        semantic_analyzer.analyze_tree(tree, &input);
+    } else {
+        eprintln!("Error: No parse tree generated");
+        std::process::exit(1);
+    }
 
     //if we reach here, both lexical and syntax analysis succeeded
     println!("valid");

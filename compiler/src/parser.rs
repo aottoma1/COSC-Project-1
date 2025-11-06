@@ -104,6 +104,7 @@ impl<'a> LolcodeParser<'a> {
         
         self.skip_newlines();
         self.match_hashword("#KTHXBYE");
+        self.skip_newlines();  // will still end program if there is extra white space at end
         
         // Check for EOF
         if !matches!(self.current_tok.kind, TokenKind::Eof) {
@@ -128,6 +129,18 @@ impl<'a> LolcodeParser<'a> {
                 if hw == "#MAEK" {
                     // Section
                     nodes.push(self.section());
+                    continue;
+                }
+                // Check for variable declarations at top level
+                if hw == "#I HAZ" {
+                    nodes.push(self.variable_declaration());
+                    self.skip_newlines();
+                    // Check for assignment that follows
+                    if let TokenKind::HashWord(ref hw2) = self.current_tok.kind {
+                        if hw2 == "#IT IZ" {
+                            nodes.push(self.variable_assignment());
+                        }
+                    }
                     continue;
                 }
                 // some other hashword
@@ -365,6 +378,36 @@ impl<'a> LolcodeParser<'a> {
             let style_type = style.clone();
             self.next_token();
             
+            // NEWLINE is special - doesn't need content or #MKAY
+            if style_type == "NEWLINE" {
+                return ASTNode::Newline;
+            }
+            
+            // SOUNDZ and VIDZ take URLs
+            if style_type == "SOUNDZ" || style_type == "VIDZ" {
+                let mut url = String::new();
+                
+                // Collect the actual URL until #MKAY tag
+                while !matches!(self.current_tok.kind, TokenKind::HashWord(ref hw) if hw == "#MKAY") {
+                    match &self.current_tok.kind {
+                        TokenKind::Text(t) => url.push_str(t),
+                        TokenKind::VarDef(v) => url.push_str(v),
+                        TokenKind::Address(a) => url.push_str(a),
+                        _ => break,
+                    }
+                    self.next_token();
+                }
+                
+                self.match_hashword("#MKAY");
+                
+                return if style_type == "SOUNDZ" {
+                    ASTNode::Sound { url: url.trim().to_string() }
+                } else {
+                    ASTNode::Video { url: url.trim().to_string() }
+                };
+            }
+            
+            //vector to hold italic/bold text
             let mut content = Vec::new();
             
             while !matches!(self.current_tok.kind, TokenKind::HashWord(ref hw) if hw == "#MKAY") {
@@ -409,7 +452,7 @@ impl<'a> LolcodeParser<'a> {
         ASTNode::ListSection { children: items }
     }
 
-    /// <list_item> ::= #GIMMEH ITEM <text> #MKAY
+    // grammar: <list_item> ::= #GIMMEH ITEM <text> #MKAY
     fn list_item(&mut self) -> ASTNode {
         self.match_hashword("#GIMMEH");
         self.match_keyword("ITEM");

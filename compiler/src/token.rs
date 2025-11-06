@@ -7,11 +7,10 @@ pub enum TokenKind {
     Keyword(String),
 
     // text that isn't a defined keyword in the grammar
-    Text(String),     
-    Address(String),   
+    Address(String),
+    Text(String),      
     VarDef(String),   
-    VarVal(String), 
-
+    VarVal(String),
     Newline,
     Eof,
 }
