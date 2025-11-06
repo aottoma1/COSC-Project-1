@@ -23,7 +23,7 @@ pub enum ASTNode {
     Text { content: String },
     Bold { content: Vec<ASTNode> },
     Italics { content: Vec<ASTNode> },
-    Item { content: String },
+    Item { content: Vec<ASTNode> },
     Newline,
     Sound { url: String },
     Video { url: String },
@@ -143,10 +143,14 @@ impl<'a> LolcodeParser<'a> {
                     }
                     continue;
                 }
+            if hw == "#LEMME SEE" {
+                nodes.push(self.variable_reference());
+                continue;
+            }
                 // some other hashword
-                if hw == "#GIMMEH" {
-                    nodes.push(self.styled_text());
-                    continue;
+            if hw == "#GIMMEH" {
+                nodes.push(self.styled_text());
+                continue;
                 }
             }
             
@@ -298,6 +302,7 @@ impl<'a> LolcodeParser<'a> {
                     "#IT IZ" => self.variable_assignment(),
                     "#LEMME SEE" => self.variable_reference(),
                     "#GIMMEH" => self.styled_text(),
+                    "#MAEK" => self.section(),
                     _ => self.syntax_error(&format!("Unexpected hashword in paragraf: {}", hw)),
                 }
             }
@@ -383,44 +388,63 @@ impl<'a> LolcodeParser<'a> {
                 return ASTNode::Newline;
             }
             
-            // SOUNDZ and VIDZ take URLs
-            if style_type == "SOUNDZ" || style_type == "VIDZ" {
-                let mut url = String::new();
-                
-                // Collect the actual URL until #MKAY tag
-                while !matches!(self.current_tok.kind, TokenKind::HashWord(ref hw) if hw == "#MKAY") {
-                    match &self.current_tok.kind {
-                        TokenKind::Text(t) => url.push_str(t),
-                        TokenKind::VarDef(v) => url.push_str(v),
-                        TokenKind::Address(a) => url.push_str(a),
-                        _ => break,
-                    }
-                    self.next_token();
-                }
-                
-                self.match_hashword("#MKAY");
-                
-                return if style_type == "SOUNDZ" {
-                    ASTNode::Sound { url: url.trim().to_string() }
-                } else {
-                    ASTNode::Video { url: url.trim().to_string() }
-                };
+           // SOUNDZ and VIDZ take URLs
+        if style_type == "SOUNDZ" || style_type == "VIDZ" {
+            let mut url = String::new();
+    
+        // Collect the actual URL until #MKAY tag
+        while !matches!(self.current_tok.kind, TokenKind::HashWord(ref hw) if hw == "#MKAY") {
+            match &self.current_tok.kind {
+                TokenKind::Text(t) => {
+                url.push_str(t);
+                self.next_token();
             }
+            TokenKind::VarDef(v) => {
+                url.push_str(v);
+                self.next_token();
+            }
+            TokenKind::Address(a) => {
+                url.push_str(a);
+                self.next_token();
+            }
+            TokenKind::Newline => {
+                // Skip newlines in URLs
+                self.next_token();
+            }
+            _ => break,
+        }
+    }
+    
+    self.match_hashword("#MKAY");
+    
+    return if style_type == "SOUNDZ" {
+        ASTNode::Sound { url: url.trim().to_string() }
+    } else {
+        ASTNode::Video { url: url.trim().to_string() }
+    };
+}
             
             //vector to hold italic/bold text
             let mut content = Vec::new();
             
             while !matches!(self.current_tok.kind, TokenKind::HashWord(ref hw) if hw == "#MKAY") {
                 match &self.current_tok.kind {
+                    TokenKind::HashWord(hw) if hw == "#LEMME SEE" => {
+                        // variable reference inside styled
+                        content.push(self.variable_reference());
+            
+        }
                     TokenKind::Text(t) => {
                         content.push(ASTNode::Text { content: t.clone() });
+                        self.next_token();
                     }
                     TokenKind::VarDef(v) => {
                         content.push(ASTNode::Text { content: v.clone() });
+                        self.next_token();
                     }
                     _ => break,
                 }
-                self.next_token();
+                
             }
             
             self.match_hashword("#MKAY");
@@ -454,30 +478,32 @@ impl<'a> LolcodeParser<'a> {
 
     // grammar: <list_item> ::= #GIMMEH ITEM <text> #MKAY
     fn list_item(&mut self) -> ASTNode {
-        self.match_hashword("#GIMMEH");
-        self.match_keyword("ITEM");
-        
-        let mut item_text = String::new();
-        
-        while !matches!(self.current_tok.kind, TokenKind::HashWord(ref hw) if hw == "#MKAY") {
-            match &self.current_tok.kind {
-                TokenKind::Text(t) => {
-                    item_text.push_str(t);
-                    item_text.push(' ');
-                }
-                TokenKind::VarDef(v) => {
-                    item_text.push_str(v);
-                    item_text.push(' ');
-                }
-                _ => break,
+    self.match_hashword("#GIMMEH");
+    self.match_keyword("ITEM");
+    
+    let mut content = Vec::new();
+    
+    while !matches!(self.current_tok.kind, TokenKind::HashWord(ref hw) if hw == "#MKAY") {
+        match &self.current_tok.kind {
+            TokenKind::HashWord(hw) if hw == "#LEMME SEE" => {
+                content.push(self.variable_reference());
             }
-            self.next_token();
+            TokenKind::Text(t) => {
+                content.push(ASTNode::Text { content: t.clone() });
+                self.next_token();
+            }
+            TokenKind::VarDef(v) => {
+                content.push(ASTNode::Text { content: v.clone() });
+                self.next_token();
+            }
+            _ => break,
         }
-        
-        self.match_hashword("#MKAY");
-        
-        ASTNode::Item { content: item_text.trim().to_string() }
     }
+    
+    self.match_hashword("#MKAY");
+    
+    ASTNode::Item { content }
+}
 }
 
 impl<'a> Parser for LolcodeParser<'a> {

@@ -192,10 +192,15 @@ impl LolcodeSemanticAnalyzer {
                 }
             }
 
+            ASTNode::Item { content } => {
+                for child in content {
+                    self.traverse(child);
+                }
+            }
+
             // nothing in leaf nodes
             ASTNode::Title { .. } => {}
             ASTNode::Text { .. } => {}
-            ASTNode::Item { .. } => {}
             ASTNode::Newline => {}
             ASTNode::Sound { .. } => {}
             ASTNode::Video { .. } => {}
@@ -331,7 +336,11 @@ impl LolcodeSemanticAnalyzer {
             }
 
             ASTNode::Item { content } => {
-                format!("<li>{}</li>\n", content)
+                let mut item_html = String::new();
+                for child in content {
+                    item_html.push_str(&self.generate_html_with_traversal(child));
+                }
+                format!("<li>{}</li>\n", item_html)
             }
 
             ASTNode::Newline => {
@@ -410,13 +419,13 @@ impl LolcodeSemanticAnalyzer {
 {
     let windows_path = path_str.replace("/", "\\");
     
-    // Try Chrome first
+    //  Chrome first
     let chrome_result = Command::new("chrome")
         .arg(&windows_path)
         .spawn();
     
     if chrome_result.is_err() {
-        // Fallback to default browser
+        // default browser if not chrome
         let _ = Command::new("cmd")
             .args(&["/C", "start", "", &windows_path])
             .spawn();
@@ -426,8 +435,4 @@ impl LolcodeSemanticAnalyzer {
         
     }
 
-    /// Get the current scope's symbol table (useful for debugging)
-    pub fn get_current_scope(&self) -> &HashMap<String, Option<String>> {
-        &self.scope_stack.last().unwrap().variables
-    }
 }
