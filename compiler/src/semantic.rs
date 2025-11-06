@@ -405,25 +405,23 @@ impl LolcodeSemanticAnalyzer {
         
         let path_str = absolute_path.to_string_lossy().to_string();
         
-        // using windows
+        // using windows OS and chrome to open
         #[cfg(target_os = "windows")]
-        {
-            // Convert forward slashes to backslashes for Windows
-            let windows_path = path_str.replace("/", "\\");
-            
-            // Try to open in browser
-            let result = Command::new("cmd")
-                .args(&["/C", "start", "", &windows_path])
-                .spawn();
-            
-            match result {
-                Ok(_) => println!("Attempting to open {} in browser...", windows_path),
-                Err(e) => {
-                    eprintln!("Could not auto-open browser: {}", e);
-                    println!("Please manually open: {}", windows_path);
-                }
-            }
-        }
+{
+    let windows_path = path_str.replace("/", "\\");
+    
+    // Try Chrome first
+    let chrome_result = Command::new("chrome")
+        .arg(&windows_path)
+        .spawn();
+    
+    if chrome_result.is_err() {
+        // Fallback to default browser
+        let _ = Command::new("cmd")
+            .args(&["/C", "start", "", &windows_path])
+            .spawn();
+    }
+}
     
         
     }
