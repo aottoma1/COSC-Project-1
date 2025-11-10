@@ -1,3 +1,21 @@
+//! # LOLCODE Compiler
+//! 
+//! A compiler for the LOLCODE-inspired markdown language that performs lexical analysis,
+//! syntax analysis, semantic analysis, and HTML code generation.
+//! 
+//! ## Usage
+//! 
+//! ```bash
+//! cargo run <file.lol>
+//! ```
+//! 
+//! ## Pipeline
+//! 
+//! The compiler processes input through four stages:
+//! 1. **Lexical Analysis** - Tokenizes the input file
+//! 2. **Syntax Analysis** - Builds an Abstract Syntax Tree (AST)
+//! 3. **Semantic Analysis** - Validates variable usage and scoping
+//! 4. **Code Generation** - Produces HTML output from the validated AST
 
 mod token;
 mod lexer;
@@ -9,6 +27,10 @@ use parser::{LolcodeParser, Parser};
 use semantic::LolcodeSemanticAnalyzer;
 use std::path::Path;
 
+/// Entry point for the LOLCODE compiler.
+/// 
+/// Reads a `.lol` file, validates it through lexical, syntax, and semantic analysis,
+/// then generates an HTML file and opens it in the browser.
 fn main() {
     //one input file to test
     let input = std::env::args().nth(1).unwrap_or_else(||{
@@ -27,6 +49,7 @@ fn main() {
         eprintln!("Failed to read '{}': {}", input, e);
         std::process::exit(1);
     });
+    
     //Testing task 1: Lexical Analysis
     //test that all tokens are valid
     let mut lexer = Lexer::new(&source);

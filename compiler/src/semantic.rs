@@ -1,13 +1,23 @@
+//! Semantic analyzer for the LOLCODE language.
+//! 
+//! This module performs semantic analysis including variable scope checking, usage validation,
+//! and HTML code generation. It implements a scope stack to handle nested scoping rules
+//! and ensures variables are declared before use and assigned before reference.
+
 use crate::parser::ASTNode;
 use std::collections::HashMap;
 use std::process::exit;
 
+/// Trait defining the interface for semantic analysis.
 // Semantic Analyzer trait
 pub trait SemanticAnalyzer {
     fn analyze(&mut self);
     fn check_variables(&mut self);
 }
 
+/// Represents a single scope level with its own symbol table.
+/// 
+/// Each scope maintains a mapping of variable names to their optional values.
 // scope level with its own symbol table
 #[derive(Debug, Clone)]
 struct Scope {
@@ -15,6 +25,7 @@ struct Scope {
 }
 
 impl Scope {
+    /// Creates a new empty scope.
     fn new() -> Self {
         Self {
             variables: HashMap::new(),
@@ -22,6 +33,10 @@ impl Scope {
     }
 }
 
+/// Concrete semantic analyzer implementation with scope support.
+/// 
+/// Maintains a stack of scopes (local scopes on top, global at bottom),
+/// tracks variable declarations and assignments, and generates HTML output.
 // Concrete semantic analyzer implementation with scope support
 pub struct LolcodeSemanticAnalyzer {
     // Stack of scopes:local scopes at top, then global
@@ -33,6 +48,9 @@ pub struct LolcodeSemanticAnalyzer {
 }
 
 impl LolcodeSemanticAnalyzer {
+    /// Creates a new semantic analyzer.
+    /// 
+    /// Initializes with a single global scope and no errors.
     pub fn new() -> Self {
         Self {
             scope_stack: vec![Scope::new()], // Start with global scope
@@ -41,16 +59,19 @@ impl LolcodeSemanticAnalyzer {
         }
     }
 
+    /// Records a semantic error.
     // handles semantic error reporting
     fn semantic_error(&mut self, msg: String) {
         self.errors.push(msg);
     }
 
+    /// Enters a new scope by pushing it onto the scope stack.
     // new scope (push onto stack)
     fn enter_scope(&mut self) {
         self.scope_stack.push(Scope::new());
     }
 
+    /// Exits the current scope by popping it from the stack.
     // exit current scope (pop)
     fn exit_scope(&mut self) {
         if self.scope_stack.len() > 1 {
@@ -58,11 +79,15 @@ impl LolcodeSemanticAnalyzer {
         }
     }
 
+    /// Gets a mutable reference to the current (top) scope.
     // get current scope (top of stack)
     fn current_scope(&mut self) -> &mut Scope {
         self.scope_stack.last_mut().unwrap()
     }
 
+    /// Looks up a variable in the scope stack.
+    /// 
+    /// Searches from innermost to outermost scope.
     // look for variable in current scope
     fn lookup_variable(&self, name: &str) -> Option<Option<String>> {
         // Search closest to furthest
@@ -74,6 +99,9 @@ impl LolcodeSemanticAnalyzer {
         None
     }
 
+    /// Declares a variable in the current scope.
+    /// 
+    /// Reports an error if the variable is already declared in the current scope.
     // Declare a variable in current scope
     fn declare_variable(&mut self, name: String) {
         let scope = self.current_scope();
@@ -89,12 +117,14 @@ impl LolcodeSemanticAnalyzer {
         }
     }
 
+    /// Declares a variable during code generation without error checking.
     // Declare a variable in current scope 
     fn declare_variable_codegen(&mut self, name: String) {
         let scope = self.current_scope();
         scope.variables.insert(name, None);
     }
 
+    /// Assigns a value to a previously declared variable.
     // Assign value to a variable
     fn assign_variable(&mut self, name: &str, value: String) {
         // Find the variable in current or parent scopes and assign the value
@@ -108,6 +138,10 @@ impl LolcodeSemanticAnalyzer {
         self.semantic_error(format!("Cannot assign to undeclared variable '{}'", name));
     }
 
+    /// Traverses the AST and checks for semantic errors.
+    /// 
+    /// Validates variable declarations, assignments, and references while
+    /// respecting scope boundaries.
     // Traverse the parse tree and check for semantic errors
     fn traverse(&mut self, node: &ASTNode) {
         match node {
@@ -207,6 +241,7 @@ impl LolcodeSemanticAnalyzer {
         }
     }
 
+    /// Prints all accumulated semantic errors and exits if any were found.
     /// Print all semantic errors and exit if any found
     fn report_errors(&self) {
         if !self.errors.is_empty() {
@@ -231,6 +266,11 @@ impl SemanticAnalyzer for LolcodeSemanticAnalyzer {
 }
 
 impl LolcodeSemanticAnalyzer {
+    /// Analyzes the parse tree and generates HTML output.
+    /// 
+    /// Performs two passes:
+    /// 1. Semantic validation pass to check for errors
+    /// 2. Code generation pass to produce HTML with variable substitution
     // analyze parse tree
     pub fn analyze_tree(&mut self, tree: &ASTNode, input_filename: &str) {
         println!("Starting semantic analysis...");
@@ -262,6 +302,10 @@ impl LolcodeSemanticAnalyzer {
         self.open_in_browser(&output_filename);
     }
 
+    /// Generates HTML by re-traversing the tree and maintaining scope.
+    /// 
+    /// During this pass, variables are populated with their values and
+    /// substituted into the HTML output.
     // Generate HTML by re-traversing the tree and maintaining scope
     fn generate_html_with_traversal(&mut self, node: &ASTNode) -> String {
         match node {
@@ -378,6 +422,7 @@ impl LolcodeSemanticAnalyzer {
         }
     }
 
+    /// Writes HTML content to an output file.
     // Write HTML to output file
     fn write_html_file(&self, html: &str, input_filename: &str) -> String {
         use std::fs;
@@ -396,9 +441,9 @@ impl LolcodeSemanticAnalyzer {
         output_filename.to_string_lossy().to_string()
     }
 
+    /// Opens the HTML file in the default browser.
     // Open HTML file in browser
     fn open_in_browser(&self, filename: &str) {
-        use std::process::Command;
         use std::path::Path;
         use std::env;
         
@@ -412,27 +457,25 @@ impl LolcodeSemanticAnalyzer {
                 .join(path)
         };
         
-        let path_str = absolute_path.to_string_lossy().to_string();
+        let _path_str = absolute_path.to_string_lossy().to_string();
         
         // using windows OS and chrome to open
         #[cfg(target_os = "windows")]
-{
-    let windows_path = path_str.replace("/", "\\");
-    
-    //  Chrome first
-    let chrome_result = Command::new("chrome")
-        .arg(&windows_path)
-        .spawn();
-    
-    if chrome_result.is_err() {
-        // default browser if not chrome
-        let _ = Command::new("cmd")
-            .args(&["/C", "start", "", &windows_path])
-            .spawn();
+        {
+            use std::process::Command;
+            let windows_path = _path_str.replace("/", "\\");
+            
+            //  Chrome first
+            let chrome_result = Command::new("chrome")
+                .arg(&windows_path)
+                .spawn();
+            
+            if chrome_result.is_err() {
+                // default browser if not chrome
+                let _ = Command::new("cmd")
+                    .args(&["/C", "start", "", &windows_path])
+                    .spawn();
+            }
+        }
     }
-}
-    
-        
-    }
-
 }

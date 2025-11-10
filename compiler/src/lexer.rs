@@ -1,28 +1,51 @@
+//! Lexical analyzer for the LOLCODE language.
+//! 
+//! This module implements a character-by-character lexer that tokenizes LOLCODE source code.
+//! The lexer recognizes keywords, hashtag words, variables, text content, and handles
+//! multi-line comments.
+
 //taking from other token.rs without having to repeat
 use crate::token::{Token, TokenKind};
 //exit when something illegal found
 use std::process::exit;
 
-//Lexical analyzer trait
-pub trait LexicalAnalyzer{
+/// Trait defining the interface for lexical analysis.
+/// 
+/// Provides methods for character-level scanning and token recognition.
+pub trait LexicalAnalyzer {
+    /// Retrieves and consumes the next character from the input.
     fn get_char(&mut self) -> Option<char>;
+    
+    /// Appends a character to the current lexeme being built.
     fn add_char(&mut self, c: char);
+    
+    /// Checks if a string is a valid keyword or hashtag word.
     fn lookup(&self, s: &str) -> bool;
+    
+    /// Retrieves the next token from the input stream.
     fn get_next_token(&mut self) -> Token;
 }
 
-// Char by char Lexer
-pub struct Lexer<'a>{
+/// Character-by-character lexer implementation for LOLCODE.
+/// 
+/// Maintains source position (line and column), character lookahead,
+/// and builds lexemes token by token.
+pub struct Lexer<'a> {
     src: &'a str,
     iter: std::str::CharIndices<'a>,
     look: Option<(usize, char)>, 
+    /// Current line number (1-indexed)
     pub line: usize,
+    /// Current column number (1-indexed)
     pub col: usize,
     // for building a lexeme
     cur: String,
 }
 
-impl <'a> Lexer <'a>{
+impl <'a> Lexer <'a> {
+    /// Creates a new lexer for the given source code.
+    /// 
+    /// Initializes the lexer at line 1, column 1 with the first character loaded.
     pub fn new(src: &'a str) -> Self {
         let mut iter = src.char_indices();
         let look = iter.next();
@@ -36,13 +59,17 @@ impl <'a> Lexer <'a>{
         }
     }
     
-    fn peek(&self) -> Option<char>{
+    /// Peeks at the current character without consuming it.
+    fn peek(&self) -> Option<char> {
         self.look.map(|(_,c)| c)
     }
 
+    /// Consumes and returns the current character, advancing to the next one.
+    /// 
+    /// Updates line and column counters based on the consumed character.
     //returns current character and moves counter to next one
     fn bump(&mut self) -> Option<char> {
-        let ch = self.look?; // grabs current characteer
+        let ch = self.look?; // grabs current character
         // advance line/col
         if ch.1 == '\n' {
             self.line += 1;
@@ -54,24 +81,35 @@ impl <'a> Lexer <'a>{
         Some(ch.1) // return character just consumed
     }
     
+    /// Reports a lexical error and exits the program.
+    /// 
+    /// # Panics
+    /// 
+    /// Always exits with status code 1
     fn error_exit(&self, msg: &str) -> ! {
         eprintln!("Lexical error at line {}, col {}: {}", self.line, self.col, msg);
         exit(1);
     }
 
-    fn is_hash_word(&self, upper: &str) -> bool{
+    /// Checks if a string is a valid hashtag word.
+    fn is_hash_word(&self, upper: &str) -> bool {
         matches!(upper, 
             "HAI" | "KTHXBYE" | "OBTW" | "TLDR" | "MAEK" | "OIC" | 
             "GIMMEH" | "MKAY" | "I HAZ" | "IT IZ" | "LEMME SEE"
         )
     }
 
+    /// Checks if a string is a valid language keyword.
     fn is_keyword(&self, upper: &str) -> bool {
         matches!(upper,
             "HEAD" | "TITLE" | "PARAGRAF" | "BOLD" | "ITALICS" | 
             "LIST" | "ITEM" | "NEWLINE" | "SOUNDZ" | "VIDZ"
         )
     }
+    
+    /// Skips a multi-line comment block (`#OBTW` ... `#TLDR`).
+    /// 
+    /// Ensures every `#OBTW` has a matching `#TLDR` closing tag.
     // ensures every #OBTW has a closing #TLDR which is technically some syntax analysis but only for comments
     fn skip_multiline_comment(&mut self) {
         loop {
@@ -101,6 +139,10 @@ impl <'a> Lexer <'a>{
         }
     }
 
+    /// Reads a hashtag word token (e.g., `#HAI`, `#I HAZ`, `#LEMME SEE`).
+    /// 
+    /// Handles both single-word and two-word hashtag keywords.
+    /// Multi-line comments (`#OBTW` ... `#TLDR`) are skipped entirely.
     fn read_hash_word(&mut self, start_line: usize, start_col: usize) -> Token {
         //consume #
         self.get_char();
@@ -191,6 +233,7 @@ impl <'a> Lexer <'a>{
         }
     }
 
+    /// Reads a word token (keyword or variable name).
     fn read_word(&mut self, start_line: usize, start_col: usize) -> Token {
         self.cur.clear();
         
@@ -222,6 +265,9 @@ impl <'a> Lexer <'a>{
         }
     }
 
+    /// Reads a line of plain text content.
+    /// 
+    /// Stops at newlines or hashtag symbols. Empty text is skipped.
     fn read_text_line(&mut self, start_line: usize, start_col: usize) -> Token {
         let mut text = String::new();
         
@@ -262,6 +308,10 @@ impl<'a> LexicalAnalyzer for Lexer<'a> {
         self.is_keyword(s) || self.is_hash_word(s)
     }
 
+    /// Retrieves the next token from the input.
+    /// 
+    /// Skips whitespace (spaces and tabs) but preserves newlines as tokens.
+    /// Recognizes hashtag words, keywords, variables, and text content.
     fn get_next_token(&mut self) -> Token {
         // Skip spaces/tabs, don't ignore newlines
         while let Some(c) = self.peek() {
